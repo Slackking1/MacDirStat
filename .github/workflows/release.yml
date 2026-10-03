@@ -45,6 +45,9 @@ jobs:
       - name: Build and sign
         run: UNIVERSAL=1 VERSION="${GITHUB_REF_NAME#v}" ./scripts/build-app.sh
 
+      - name: Launch smoke test
+        run: ./scripts/smoke-test.sh .build/MacDirStat.app/Contents/MacOS/MacDirStat
+
       - name: Notarize
         env:
           NOTARY_API_KEY: ${{ secrets.NOTARY_API_KEY }}
