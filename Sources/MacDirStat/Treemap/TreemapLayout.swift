@@ -206,17 +206,3 @@ struct TreemapLayoutEngine: Sendable {
         return worst
     }
 }
-
-struct TreemapHitTester: Sendable {
-    let items: [TreemapItem]
-
-    func itemAt(point: CGPoint) -> TreemapItem? {
-        // Reverse iterate to find deepest (topmost rendered) item
-        for item in items.reversed() {
-            if item.rect.contains(point: point) {
-                return item
-            }
-        }
-        return nil
-    }
-}
