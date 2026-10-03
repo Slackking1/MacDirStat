@@ -16,13 +16,14 @@ enum FileExtensionMap {
         let images = [
             "jpg", "jpeg", "png", "gif", "bmp", "tiff", "tif",
             "svg", "webp", "ico", "icns", "heic", "heif",
-            "raw", "cr2", "nef", "arw", "dng", "psd", "ai",
+            // Not "raw": it's as often a disk image (Docker.raw) as a camera file.
+            "cr2", "nef", "arw", "dng", "psd", "ai",
             "sketch", "fig", "xcf"
         ]
 
         let video = [
             "mp4", "mov", "avi", "mkv", "wmv", "flv", "webm",
-            "m4v", "mpg", "mpeg", "3gp", "ts", "vob", "ogv"
+            "m4v", "mpg", "mpeg", "3gp", "vob", "ogv"
         ]
 
         let audio = [
@@ -64,7 +65,7 @@ enum FileExtensionMap {
         let caches = [
             "cache", "tmp", "temp", "swp", "swo",
             "o", "obj", "pyc", "pyo", "class",
-            "dSYM", "ipa", "xcarchive"
+            "dsym", "xcarchive"
         ]
 
         for ext in documents { map[ext] = .documents }

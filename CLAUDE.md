@@ -26,21 +26,23 @@ MacDirStat is a native macOS (15.0+) SwiftUI disk space analyzer that visualizes
 
 **AppState** (`@Observable`) is the single source of truth. It holds the scanned file tree (`rootNode: FileNode`), the current treemap view root (`treemapRoot`), selected node, and breadcrumb navigation stack. All views react to AppState changes.
 
-Scan flow: User picks folder → **ScanCoordinator** launches **FileScanner** → FileScanner uses BSD `fts_open`/`fts_read`/`fts_close` (not FileManager, for performance) → yields `ScanEvent`s via `AsyncStream` → ScanCoordinator throttles updates (50ms) and builds the **FileNode** tree → treemap renders.
+Scan flow: User picks folder → **ScanCoordinator** launches **FileScanner** → FileScanner walks the tree with POSIX `opendir`/`readdir`/`fstatat` (not FileManager, for performance), scanning subdirectories in parallel with a task group, and builds the **FileNode** tree itself → it streams `ScanEvent`s (`.progress`, then `.completed(root:)`) via `AsyncStream` → ScanCoordinator throttles progress updates (50ms) and hands the finished tree to AppState → treemap renders.
 
 ### Module Layout (Sources/MacDirStat/)
 
 - **App/** — Entry point (`MacDirStatApp`) and `AppState` central state management
-- **Scanning/** — `FileScanner` (BSD fts-based traversal with inode dedup, symlink handling, allocated size via blocks×512), `ScanCoordinator` (async orchestration, throttling, cancellation), `FileNode` (tree model with weak parent refs to avoid retain cycles, recursive aggregate computation)
-- **Categorization/** — `FileCategory` (10 categories with colors/SF Symbols) and `FileExtensionMap` (200+ extension→category mappings)
-- **Treemap/** — `TreemapLayoutEngine` (Squarify algorithm, max 8 depth levels), `TreemapHitTester`, `TreemapRenderer` (Canvas-based with depth-darkened category colors), `TreemapView` (click/double-click/hover/context menu interactions)
-- **Views/** — `ContentView` (NavigationSplitView: sidebar tree + center treemap + inspector), `WelcomeView` (volume list with usage bars, NSOpenPanel), `ScanProgressView`, `DirectoryTreeView` (OutlineGroup), `DetailPanelView` (metadata + category breakdown)
-- **Utilities/** — `ByteFormatter` (human-readable sizes)
+- **Scanning/** — `FileScanner` (parallel POSIX traversal with inode dedup, skips symlinks and other volumes, allocated size via blocks×512), `ScanCoordinator` (async orchestration, throttling, cancellation), `FileNode` (tree model with weak parent refs to avoid retain cycles, recursive aggregate computation)
+- **Categorization/** — `FileCategory` (10 categories with colors/SF Symbols) and `FileExtensionMap` (~190 extension→category mappings; each extension belongs to one category, keys are lowercase)
+- **Treemap/** — `TreemapLayoutEngine` in `TreemapLayout.swift` (Squarify algorithm, max 12 depth levels), `TreemapRenderer` (Canvas-based with depth-darkened category colors), `TreemapView` (hit testing; click/double-click drill-down/hover/context menu interactions), `ZoomPanOverlay` (scroll, pinch, and middle-drag zoom/pan)
+- **Views/** — `ContentView` (NavigationSplitView: sidebar tree + center treemap + inspector), `WelcomeView` (volume list with usage bars, Full Disk Access banner), `ScanProgressView`, `DirectoryTreeView` (OutlineGroup), `DetailPanelView` (metadata + category breakdown)
+- **Utilities/** — `ByteFormatter` (human-readable sizes), `FolderPicker` (shared NSOpenPanel), `FullDiskAccess` (permission probe and System Settings link)
 
 ### Key Patterns
 
 - All data types crossing async boundaries are `Sendable`
 - FileNode uses weak parent references to break retain cycles
-- FileScanner deduplicates hard links by tracking seen inodes
+- FileScanner deduplicates hard links and firmlinks by tracking seen inodes
+- Menu commands reach the frontmost window through `focusedSceneValue` actions (see `OpenFolderCommands` and the zoom commands), not notifications
+- Local SwiftPM builds record SDK 15.0 while CI links the macOS 26 SDK, which changes AppKit/SwiftUI behavior; test release builds from CI (or stamp a local build with `vtool -set-build-version`) before trusting a local result
 - TreemapView uses Canvas for rendering (not individual SwiftUI views) for performance
 - macOS APIs used: `NSWorkspace` (Reveal in Finder), `NSPasteboard` (clipboard), `NSOpenPanel` (folder picker)
