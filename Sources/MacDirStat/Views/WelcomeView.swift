@@ -99,15 +99,8 @@ struct WelcomeView: View {
     }
 
     private func selectCustomFolder() {
-        let panel = NSOpenPanel()
-        panel.canChooseFiles = false
-        panel.canChooseDirectories = true
-        panel.allowsMultipleSelection = false
-        panel.message = "Select a folder to scan"
-        panel.prompt = "Scan"
-
-        if panel.runModal() == .OK, let url = panel.url {
-            onVolumeSelected(url.path(percentEncoded: false))
+        if let path = FolderPicker.chooseFolder() {
+            onVolumeSelected(path)
         }
     }
 }
