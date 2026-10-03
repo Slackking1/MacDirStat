@@ -174,21 +174,12 @@ struct TreemapView: View {
     }
 
     private func hitTestID(at point: CGPoint) -> Int? {
-        for item in items.reversed() {
-            if item.rect.contains(point: point) {
-                return item.id
-            }
-        }
-        return nil
+        hitTestItem(at: point)?.id
     }
 
+    /// Items are drawn in order, so the last one containing the point is the deepest one on top.
     private func hitTestItem(at point: CGPoint) -> TreemapItem? {
-        for item in items.reversed() {
-            if item.rect.contains(point: point) {
-                return item
-            }
-        }
-        return nil
+        items.last { $0.rect.contains(point: point) }
     }
 
     /// Folders drill into themselves. Files, which cover most of the treemap, drill into the
