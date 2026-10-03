@@ -1,14 +1,25 @@
 #!/bin/bash
 # Builds a release MacDirStat.app (with Info.plist and icon) at .build/MacDirStat.app.
 # Install with: cp -R .build/MacDirStat.app /Applications/
+#
+# Optional environment:
+#   VERSION=1.2.3      version written to Info.plist (default 0.1.0)
+#   UNIVERSAL=1        build for both arm64 and x86_64
+#   SIGN_IDENTITY=...  codesigning identity, e.g. "Developer ID Application: Name (TEAMID)" for
+#                      distribution; the default "-" signs ad hoc
 set -euo pipefail
 
-VERSION="0.1.0"
+VERSION="${VERSION:-0.1.0}"
+SIGN_IDENTITY="${SIGN_IDENTITY:--}"
 BUNDLE_ID="io.github.phalladar.MacDirStat"
 
 cd "$(dirname "$0")/.."
-swift build -c release
-BIN_DIR="$(swift build -c release --show-bin-path)"
+BUILD_ARGS=(-c release)
+if [[ "${UNIVERSAL:-}" == 1 ]]; then
+    BUILD_ARGS+=(--arch arm64 --arch x86_64)
+fi
+swift build "${BUILD_ARGS[@]}"
+BIN_DIR="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)"
 
 APP=".build/MacDirStat.app"
 rm -rf "$APP"
@@ -52,7 +63,12 @@ cat > "$APP/Contents/Info.plist" <<EOF
 </plist>
 EOF
 
-# Ad-hoc sign so the bundle's resources are sealed and the signature is valid.
-codesign --force --sign - "$APP"
+if [[ "$SIGN_IDENTITY" == "-" ]]; then
+    # Ad-hoc sign so the bundle's resources are sealed and the signature is valid.
+    codesign --force --sign - "$APP"
+else
+    # Notarization requires the hardened runtime and a secure timestamp.
+    codesign --force --sign "$SIGN_IDENTITY" --options runtime --timestamp "$APP"
+fi
 
 echo "Built $APP"
