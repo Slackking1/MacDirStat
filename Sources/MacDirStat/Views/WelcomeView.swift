@@ -19,9 +19,16 @@ struct WelcomeView: View {
     let onVolumeSelected: (String) -> Void
 
     @State private var volumes: [VolumeInfo] = []
+    @State private var hasFullDiskAccess = FullDiskAccess.isGranted
+    @State private var isAccessBannerDismissed = false
 
     var body: some View {
         VStack(spacing: 32) {
+            if !hasFullDiskAccess && !isAccessBannerDismissed {
+                FullDiskAccessBanner(onDismiss: { isAccessBannerDismissed = true })
+                    .padding(.horizontal, 40)
+            }
+
             // Header
             VStack(spacing: 12) {
                 Image(systemName: "chart.bar.doc.horizontal.fill")
@@ -61,6 +68,10 @@ struct WelcomeView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(.regularMaterial)
         .onAppear { loadVolumes() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            // Re-check when the user returns from System Settings
+            hasFullDiskAccess = FullDiskAccess.isGranted
+        }
     }
 
     private func loadVolumes() {
@@ -108,6 +119,67 @@ struct WelcomeView: View {
 
         if panel.runModal() == .OK, let url = panel.url {
             onVolumeSelected(url.path(percentEncoded: false))
+        }
+    }
+}
+
+// MARK: - Full Disk Access Banner
+
+struct FullDiskAccessBanner: View {
+    let onDismiss: () -> Void
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "lock.shield")
+                .font(.title2)
+                .foregroundStyle(.orange)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Full Disk Access is off")
+                    .font(.headline)
+                Text("Without it, protected folders such as Mail, Messages and other apps' data are skipped and sizes will be under-reported. Enable MacDirStat in System Settings, then relaunch the app.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 12)
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Button("Open System Settings") { FullDiskAccess.openSystemSettings() }
+                    .buttonStyle(.borderedProminent)
+                HStack(spacing: 6) {
+                    if isRunningFromAppBundle {
+                        Button("Relaunch") { relaunch() }
+                    }
+                    Button("Not Now", action: onDismiss)
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(.orange.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .strokeBorder(.orange.opacity(0.3), lineWidth: 1)
+        )
+    }
+
+    /// `swift run` launches a bare executable, which can't be relaunched via NSWorkspace.
+    private var isRunningFromAppBundle: Bool {
+        Bundle.main.bundleURL.pathExtension == "app"
+    }
+
+    /// Full Disk Access only takes effect for a fresh process, so reopen the bundle and quit.
+    private func relaunch() {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.createsNewApplicationInstance = true
+        NSWorkspace.shared.openApplication(at: Bundle.main.bundleURL, configuration: configuration) { _, error in
+            guard error == nil else { return }
+            Task { @MainActor in NSApp.terminate(nil) }
         }
     }
 }
