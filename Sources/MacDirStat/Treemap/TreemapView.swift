@@ -52,8 +52,9 @@ struct TreemapView: View {
                 }
             }
             .onTapGesture(count: 2) { location in
-                if let item = hitTestItem(at: screenToContent(location)), item.node.isDirectory {
-                    onDrillDown(item.node)
+                if let item = hitTestItem(at: screenToContent(location)),
+                   let target = drillDownTarget(for: item.node) {
+                    onDrillDown(target)
                 }
             }
             .onTapGesture(count: 1) { location in
@@ -72,10 +73,10 @@ struct TreemapView: View {
                         NSPasteboard.general.clearContents()
                         NSPasteboard.general.setString(item.node.path, forType: .string)
                     }
-                    if item.node.isDirectory {
+                    if let target = drillDownTarget(for: item.node) {
                         Divider()
-                        Button("Drill Down") {
-                            onDrillDown(item.node)
+                        Button("Drill Down into \(target.name)") {
+                            onDrillDown(target)
                         }
                     }
                 }
@@ -188,6 +189,13 @@ struct TreemapView: View {
             }
         }
         return nil
+    }
+
+    /// Folders drill into themselves. Files, which cover most of the treemap, drill into the
+    /// folder that contains them, unless that folder is already the one shown.
+    private func drillDownTarget(for node: FileNode) -> FileNode? {
+        let target = node.isDirectory ? node : node.parent
+        return target === root ? nil : target
     }
 
     private func recomputeLayout(size: CGSize) {

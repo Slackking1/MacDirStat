@@ -46,8 +46,9 @@ To uninstall, quit MacDirStat and drag it from Applications to the Trash. It doe
 3. **Wait for the scan.** MacDirStat shows the number of files and the total size found so far. You can cancel at any time.
 4. **Look for the biggest rectangles.** They are the files using the most space. Hover over any rectangle to see its full path and size in the status bar at the bottom.
 5. **Zoom in on crowded areas** with the scroll wheel, a trackpad pinch, or the zoom buttons in the toolbar.
-6. **Check folder totals.** The sidebar lists folders sorted largest first. Select a folder to see its size, file count, and breakdown by file type in the inspector on the right, or click a file in the treemap to see its details.
-7. **Act on what you find.** Right-click a file and choose **Reveal in Finder**, then delete it in Finder if you're sure you don't need it. Click **Rescan** in the toolbar to refresh the treemap.
+6. **Drill into a folder.** Double-click any rectangle to show just the folder it's in. The breadcrumb bar above the treemap, or the **Back** button, takes you back up.
+7. **Check folder totals.** The sidebar lists folders sorted largest first. Select a folder to see its size, file count, and breakdown by file type in the inspector on the right, or click a file in the treemap to see its details.
+8. **Act on what you find.** Right-click a file and choose **Reveal in Finder**, then delete it in Finder if you're sure you don't need it. Click **Rescan** in the toolbar to refresh the treemap.
 
 MacDirStat never deletes or moves files itself.
 
@@ -57,6 +58,7 @@ MacDirStat never deletes or moves files itself.
 - **Color-coded file types.** Files are colored by category: documents, images, video, audio, code, archives, applications, system, caches, and other.
 - **Folder tree sidebar.** Browse the folder hierarchy, sorted largest first, with each folder's size.
 - **Inspector panel.** Shows size, allocated size, file and folder counts, last-modified date, and a bar chart of what each folder contains by file type.
+- **Drill down.** Double-click a rectangle to focus the treemap on its folder, then go back up with the breadcrumb bar or the Back button.
 - **Zoom and pan.** Zoom with the scroll wheel, a trackpad pinch, or the toolbar. Pan by dragging with the middle mouse button.
 - **File Size or Allocated Size.** Switch between each file's content size and the space it actually takes up on disk.
 - **Drive overview.** The start screen shows your mounted drives with their used and available space, or you can scan any folder.
