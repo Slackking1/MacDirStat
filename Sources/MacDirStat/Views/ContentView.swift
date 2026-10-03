@@ -155,9 +155,6 @@ struct ContentView: View {
                 coordinator = ScanCoordinator(appState: appState)
             }
         }
-        .focusedSceneValue(\.scanAction, {
-            selectAndScan()
-        })
         .focusedSceneValue(\.openFolderAction, {
             openFolder()
         })
@@ -238,10 +235,6 @@ struct BreadcrumbBar: View {
 
 // MARK: - Focused Value for Menu Commands
 
-struct ScanActionKey: FocusedValueKey {
-    typealias Value = () -> Void
-}
-
 struct OpenFolderActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -259,11 +252,6 @@ struct ResetZoomActionKey: FocusedValueKey {
 }
 
 extension FocusedValues {
-    var scanAction: (() -> Void)? {
-        get { self[ScanActionKey.self] }
-        set { self[ScanActionKey.self] = newValue }
-    }
-
     var openFolderAction: (() -> Void)? {
         get { self[OpenFolderActionKey.self] }
         set { self[OpenFolderActionKey.self] = newValue }
