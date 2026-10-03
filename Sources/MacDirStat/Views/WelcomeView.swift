@@ -65,7 +65,10 @@ struct WelcomeView: View {
             .controlSize(.regular)
         }
         .padding(.vertical, 48)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Zero minimums keep the content's size out of the window's size limits. Otherwise, with
+        // the macOS 26+ SDK, the wrapping banner text feeds back into the window's constraints
+        // and AppKit aborts the launch after too many layout passes.
+        .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
         .background(.regularMaterial)
         .onAppear { loadVolumes() }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
