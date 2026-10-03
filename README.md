@@ -42,6 +42,13 @@ swift build -c release
 swift run MacDirStat
 ```
 
+To install it as a regular app in `/Applications`:
+
+```bash
+./scripts/build-app.sh
+cp -R .build/MacDirStat.app /Applications/
+```
+
 Or open in Xcode:
 
 ```bash

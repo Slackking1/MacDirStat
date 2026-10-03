@@ -8,6 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 swift build                # Debug build
 swift build -c release     # Release build
 swift run MacDirStat       # Run the app
+./scripts/build-app.sh     # Release build packaged as .build/MacDirStat.app (Info.plist, icon, ad-hoc signed)
 open Package.swift         # Open in Xcode
 ```
 
