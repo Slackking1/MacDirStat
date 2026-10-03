@@ -158,11 +158,20 @@ struct ContentView: View {
         .focusedSceneValue(\.scanAction, {
             selectAndScan()
         })
+        .focusedSceneValue(\.openFolderAction, {
+            openFolder()
+        })
     }
 
     private func selectAndScan() {
         coordinator?.cancel()
         appState.scanStatus = .idle
+    }
+
+    private func openFolder() {
+        if let path = FolderPicker.chooseFolder() {
+            coordinator?.startScan(path: path)
+        }
     }
 }
 
@@ -233,6 +242,10 @@ struct ScanActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
 
+struct OpenFolderActionKey: FocusedValueKey {
+    typealias Value = () -> Void
+}
+
 struct ZoomInActionKey: FocusedValueKey {
     typealias Value = () -> Void
 }
@@ -249,6 +262,11 @@ extension FocusedValues {
     var scanAction: (() -> Void)? {
         get { self[ScanActionKey.self] }
         set { self[ScanActionKey.self] = newValue }
+    }
+
+    var openFolderAction: (() -> Void)? {
+        get { self[OpenFolderActionKey.self] }
+        set { self[OpenFolderActionKey.self] = newValue }
     }
 
     var zoomInAction: (() -> Void)? {

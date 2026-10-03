@@ -41,16 +41,22 @@ struct MacDirStatApp: App {
         }
         .defaultSize(width: 1200, height: 800)
         .commands {
-            CommandGroup(after: .newItem) {
-                Button("Open Folder...") {
-                    NotificationCenter.default.post(name: .openFolder, object: nil)
-                }
-                .keyboardShortcut("o", modifiers: .command)
-            }
+            OpenFolderCommands()
         }
     }
 }
 
-extension Notification.Name {
-    static let openFolder = Notification.Name("openFolder")
+/// Menu commands read focused values from the key window, so ⌘O acts on the window in front.
+struct OpenFolderCommands: Commands {
+    @FocusedValue(\.openFolderAction) private var openFolder
+
+    var body: some Commands {
+        CommandGroup(after: .newItem) {
+            Button("Open Folder...") {
+                openFolder?()
+            }
+            .keyboardShortcut("o", modifiers: .command)
+            .disabled(openFolder == nil)
+        }
+    }
 }
