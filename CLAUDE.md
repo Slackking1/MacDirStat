@@ -13,6 +13,8 @@ open Package.swift         # Open in Xcode
 
 No external dependencies. No test target configured yet (`swift test` will fail). No linter configured; Swift 6 strict concurrency mode is enforced via `swiftLanguageMode(.v6)` in Package.swift.
 
+CI (`.github/workflows/build.yml`) runs `swift build` on a pinned `macos-26` runner for PRs and pushes to `main`. Add `swift test` there once a test target exists.
+
 ## Architecture
 
 MacDirStat is a native macOS (15.0+) SwiftUI disk space analyzer that visualizes directory usage as interactive treemaps. Swift 6, SPM-only, zero external dependencies.
