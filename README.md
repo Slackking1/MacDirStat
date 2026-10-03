@@ -37,7 +37,7 @@ Requires macOS 15.0+ and Swift 6.
 
 ```bash
 git clone https://github.com/phalladar/MacDirStat.git
-cd macdirstat
+cd MacDirStat
 swift build -c release
 swift run MacDirStat
 ```
@@ -48,6 +48,8 @@ To install it as a regular app in `/Applications`:
 ./scripts/build-app.sh
 cp -R .build/MacDirStat.app /Applications/
 ```
+
+To include protected folders (Mail, Messages, other apps' data) in scans, add MacDirStat under **System Settings → Privacy & Security → Full Disk Access**. The script signs the app ad hoc, so macOS treats each rebuild as a new app: after rebuilding, remove MacDirStat from that list and add it again.
 
 Or open in Xcode:
 
