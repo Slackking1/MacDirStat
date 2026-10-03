@@ -11,6 +11,9 @@ let package = Package(
         .executableTarget(
             name: "MacDirStat",
             path: "Sources/MacDirStat",
+            resources: [
+                .copy("AppIcon.icns")
+            ],
             swiftSettings: [
                 .swiftLanguageMode(.v6)
             ]
