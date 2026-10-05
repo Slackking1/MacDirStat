@@ -200,6 +200,8 @@ struct SizeMetricPicker: View {
                         .padding(.vertical, 4)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(metric.rawValue)
+                .accessibilityAddTraits(sizeMetric == metric ? .isSelected : [])
                 .background(sizeMetric == metric ? Color.accentColor.opacity(0.2) : Color.clear)
             }
         }
