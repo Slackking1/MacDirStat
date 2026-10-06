@@ -17,7 +17,9 @@ struct FileScanner: Sendable {
         let limit = max(1, maximumConcurrentDirectories)
         let mode = enumerationMode
         return AsyncStream(bufferingPolicy: .bufferingNewest(16)) { continuation in
-            let task = Task.detached(priority: .utility) {
+            // The app cannot show its treemap until this requested scan finishes.
+            // Keep directory concurrency bounded while prioritizing its results.
+            let task = Task.detached(priority: .userInitiated) {
                 await performScan(rootPath: path, limit: limit, mode: mode, continuation: continuation)
             }
             continuation.onTermination = { @Sendable _ in task.cancel() }

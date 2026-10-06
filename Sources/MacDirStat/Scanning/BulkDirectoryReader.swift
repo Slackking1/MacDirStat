@@ -18,7 +18,9 @@ enum BulkDirectoryBatch {
 }
 
 struct BulkDirectoryReader {
-    private var buffer = [UInt8](repeating: 0, count: 128 * 1024)
+    // Most folders have few entries. Avoid a large zeroed allocation per folder;
+    // dense directories are read in multiple batches from the same descriptor.
+    private var buffer = [UInt8](repeating: 0, count: 16 * 1024)
     private var attributes: attrlist
     private var started = false
 
