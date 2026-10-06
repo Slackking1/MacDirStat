@@ -64,7 +64,7 @@ MacDirStat never deletes or moves files itself.
 - **Cloud-aware scanning.** File Provider placeholders (including OneDrive, synced SharePoint libraries, iCloud Drive, and other providers using macOS dataless files) are measured without downloading their contents. Cloud-only folders are skipped and marked as incomplete.
 - **Drive overview.** The start screen shows your mounted drives with their used and available space, or you can scan any folder.
 - **Reveal in Finder and Copy Path** from the inspector or the right-click menu.
-- **Parallel scanning with live progress.** MacDirStat reads the file system with low-level POSIX calls and scans folders in parallel. Hard-linked files are counted once.
+- **Parallel scanning with live progress.** MacDirStat reads file metadata in batches and scans folders in parallel, with a POSIX fallback for unsupported filesystems. Hard-linked files are counted once.
 - **Native and lightweight.** Built with SwiftUI, with no external dependencies, no Electron, and no bundled runtimes.
 - **Private by design.** The app has no networking code: no analytics, no crash reporting, no update checks. Your file list never leaves your Mac.
 
@@ -192,7 +192,7 @@ Zero external dependencies. Pure Swift Package Manager project.
 
 MacDirStat is a SwiftUI app written in Swift 6 with strict concurrency checking. A single `@Observable` `AppState` drives all views.
 
-**Scan pipeline:** the user picks a drive or folder → `ScanCoordinator` starts `FileScanner` → `FileScanner` walks the tree with `open`/`fdopendir`/`readdir`/`fstatat`, scanning at most four directories in parallel with a task group, skipping symlinks and other volumes, and deduplicating inodes so hard links and firmlinks are counted once → it builds the `FileNode` tree and streams progress as `ScanEvent`s over an `AsyncStream` → `ScanCoordinator` throttles UI updates to every 50 ms → `TreemapLayoutEngine` lays out the tree with the squarify algorithm on a background task → a SwiftUI `Canvas` renders it.
+**Scan pipeline:** the user picks a drive or folder → `ScanCoordinator` starts `FileScanner` → `FileScanner` reads metadata with `getattrlistbulk`, using `fstatat` for directory/mount identities and missing attributes, and `readdir`/`fstatat` on unsupported filesystems. At most four directories run in parallel, symlinks and other volumes are skipped, and inode deduplication counts hard links and firmlinks once → it builds the `FileNode` tree and streams progress as `ScanEvent`s over an `AsyncStream` → `ScanCoordinator` throttles UI updates to every 50 ms → `TreemapLayoutEngine` lays out the tree with the squarify algorithm on a background task → a SwiftUI `Canvas` renders it.
 
 ### Project structure
 
@@ -211,6 +211,8 @@ Sources/MacDirStat/
 Contributions are welcome. [Open an issue](https://github.com/phalladar/MacDirStat/issues) to report a bug or suggest a feature, or submit a pull request. CI builds and tests every pull request with `swift build` and `swift test`.
 
 Run the regression suite with `swift test`. To also verify a real cloud-only directory without downloading it, set `MACDIRSTAT_CLOUD_TEST_PATH` to a File Provider placeholder directory when running `swift test`. Set `MACDIRSTAT_SCAN_TEST_PATH` to a folder to run a metadata-only integration scan and print a size/count summary.
+
+For a controlled enumeration comparison, run `MACDIRSTAT_BENCHMARK_PATH=/path/to/stable/folder swift test -c release --filter compareDirectoryEnumerationPerformance --no-parallel`. It alternates POSIX and bulk reads and checks that file/folder counts, sizes, cloud-only files and incomplete folders agree. Use a stable tree and report each timing; changing files and filesystem cache warmth affect results. This benchmark does not open file contents.
 
 ## License
 

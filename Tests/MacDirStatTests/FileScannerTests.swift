@@ -19,10 +19,11 @@ private struct Fixture {
     }
 }
 
-private func completedScan(_ path: String, limit: Int = 4) async throws -> (FileNode, Int64) {
+private func completedScan(_ path: String, limit: Int = 4,
+                           mode: DirectoryEnumerationMode = .automatic) async throws -> (FileNode, Int64) {
     var root: FileNode?
     var progressBytes: Int64 = -1
-    for await event in FileScanner(rootPath: path, maximumConcurrentDirectories: limit).scan() {
+    for await event in FileScanner(rootPath: path, maximumConcurrentDirectories: limit, enumerationMode: mode).scan() {
         switch event {
         case .completed(let node): root = node
         case .progress(_, let bytes, _): progressBytes = bytes
@@ -30,6 +31,97 @@ private func completedScan(_ path: String, limit: Int = 4) async throws -> (File
         }
     }
     return (try #require(root), progressBytes)
+}
+
+@Test func bulkAndPosixScansPreserveEveryEntryAndMetadata() async throws {
+    let fixture = try Fixture()
+    defer { fixture.remove() }
+    // More than one bulk buffer, Unicode names, folders, a sparse data fork and
+    // a resource fork exercise attributes whose logical/allocation sizes differ.
+    for index in 0..<1400 {
+        let folder = fixture.root.appendingPathComponent("folder-\(index < 1300 ? 0 : index % 7)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        try Data(repeating: 0x41, count: index % 8193).write(to: folder.appendingPathComponent("ø-📦-\(index).txt"))
+    }
+    let sparse = fixture.root.appendingPathComponent("sparse.img")
+    let fd = open(sparse.path, O_CREAT | O_WRONLY, 0o600)
+    #expect(fd >= 0)
+    #expect(ftruncate(fd, 3_000_000_000_000) == 0)
+    close(fd)
+    try Data(repeating: 0x42, count: 8192).write(to: URL(fileURLWithPath: sparse.path + "/..namedfork/rsrc"))
+    #expect(symlink(fixture.root.path, fixture.root.appendingPathComponent("cycle").path) == 0)
+    #expect(mkfifo(fixture.root.appendingPathComponent("pipe").path, 0o600) == 0)
+
+    let (bulk, _) = try await completedScan(fixture.root.path)
+    let (posix, _) = try await completedScan(fixture.root.path, mode: .posix)
+    func check(_ lhs: FileNode, _ rhs: FileNode) {
+        #expect(lhs.id == rhs.id)
+        #expect(lhs.ownSize == rhs.ownSize)
+        #expect(lhs.allocatedSize == rhs.allocatedSize)
+        #expect(lhs.modificationDate == rhs.modificationDate)
+        #expect(lhs.isDataless == rhs.isDataless)
+        #expect(lhs.totalSize == rhs.totalSize)
+        #expect(lhs.totalAllocatedSize == rhs.totalAllocatedSize)
+        #expect(lhs.fileCount == rhs.fileCount)
+        #expect(lhs.directoryCount == rhs.directoryCount)
+        #expect(lhs.totalUnavailableEntryCount == rhs.totalUnavailableEntryCount)
+        let left = lhs.children.sorted { $0.name < $1.name }
+        let right = rhs.children.sorted { $0.name < $1.name }
+        #expect(left.map(\.name) == right.map(\.name))
+        for (child, other) in zip(left, right) { check(child, other) }
+    }
+    check(bulk, posix)
+    #expect(bulk.fileCount == 1401)
+}
+
+@Test func malformedBulkRecordsAreRejected() throws {
+    let bytes = [UInt8](repeating: 0, count: 8)
+    #expect(throws: BulkMetadataError.self) {
+        try bytes.withUnsafeBytes { try decodeBulkDirectoryEntry($0, fd: -1) }
+    }
+}
+
+@Test func localFilesystemReturnsBulkMetadata() throws {
+    let fixture = try Fixture()
+    defer { fixture.remove() }
+    let file = fixture.root.appendingPathComponent("local.txt")
+    try Data(repeating: 0x41, count: 12345).write(to: file)
+    let expected = try fixture.metadata(file)
+    try withoutDatalessMaterialization {
+        let fd = open(fixture.root.path, O_RDONLY | O_DIRECTORY | O_NOFOLLOW | O_CLOEXEC)
+        #expect(fd >= 0)
+        defer { close(fd) }
+        var reader = BulkDirectoryReader()
+        guard case .entries(let entries, let unavailable) = try reader.next(fd: fd) else {
+            Issue.record("Local filesystem did not return bulk entries")
+            return
+        }
+        #expect(unavailable == 0)
+        let entry = try #require(entries.first { $0.name == "local.txt" })
+        #expect(entry.metadata.st_ino == expected.st_ino)
+        #expect(entry.metadata.st_dev == expected.st_dev)
+        #expect(entry.metadata.st_size == expected.st_size)
+        #expect(entry.metadata.st_blocks == expected.st_blocks)
+        #expect(entry.metadata.st_flags == expected.st_flags)
+    }
+}
+
+@Test(.enabled(if: ProcessInfo.processInfo.environment["MACDIRSTAT_BENCHMARK_PATH"] != nil))
+func compareDirectoryEnumerationPerformance() async throws {
+    let path = try #require(ProcessInfo.processInfo.environment["MACDIRSTAT_BENCHMARK_PATH"])
+    var reference: (files: Int, directories: Int, logical: Int64, allocated: Int64, cloud: Int, incomplete: Int)?
+    // Alternate order so both implementations see warm and cold metadata caches.
+    for mode in [DirectoryEnumerationMode.posix, .automatic, .automatic, .posix] {
+        let started = ContinuousClock.now
+        let (root, _) = try await completedScan(path, mode: mode)
+        let elapsed = ContinuousClock.now - started
+        let totals = (root.fileCount, root.directoryCount, root.totalSize, root.totalAllocatedSize,
+                      root.cloudOnlyFileCount, root.unscannedDirectoryCount)
+        if let reference {
+            #expect(totals == reference)
+        } else { reference = totals }
+        print("Enumeration benchmark: mode=\(mode), files=\(root.fileCount), directories=\(root.directoryCount), logical=\(root.totalSize), allocated=\(root.totalAllocatedSize), cloud=\(root.cloudOnlyFileCount), incomplete=\(root.unscannedDirectoryCount), elapsed=\(elapsed)")
+    }
 }
 
 @Test func sparseFilesUseAllocatedProgressAndPreserveLogicalSize() async throws {

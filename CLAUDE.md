@@ -26,7 +26,7 @@ MacDirStat is a native macOS (15.0+) SwiftUI disk space analyzer that visualizes
 
 **AppState** (`@Observable`) is the single source of truth. It holds the scanned file tree (`rootNode: FileNode`), the current treemap view root (`treemapRoot`), selected node, and breadcrumb navigation stack. All views react to AppState changes.
 
-Scan flow: User picks folder → **ScanCoordinator** launches **FileScanner** → FileScanner walks the tree with POSIX `open`/`fdopendir`/`readdir`/`fstatat` (not FileManager, for performance), scanning up to four directories in parallel with a task group, and builds the **FileNode** tree itself → it streams `ScanEvent`s (`.progress`, then `.completed(root:)`) via `AsyncStream` → ScanCoordinator throttles progress updates (50ms) and hands the finished tree to AppState → treemap renders.
+Scan flow: User picks folder → **ScanCoordinator** launches **FileScanner** → FileScanner batches metadata with `getattrlistbulk`, uses `fstatat` for directory/mount identities and missing attributes, and falls back to `readdir`/`fstatat` on unsupported filesystems. It scans up to four directories in parallel with a task group and builds the **FileNode** tree itself → it streams `ScanEvent`s (`.progress`, then `.completed(root:)`) via `AsyncStream` → ScanCoordinator throttles progress updates (50ms) and hands the finished tree to AppState → treemap renders.
 
 ### Module Layout (Sources/MacDirStat/)
 

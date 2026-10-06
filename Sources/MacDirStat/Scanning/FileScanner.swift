@@ -10,13 +10,15 @@ enum ScanEvent: Sendable {
 struct FileScanner: Sendable {
     let rootPath: String
     var maximumConcurrentDirectories: Int = 4
+    var enumerationMode: DirectoryEnumerationMode = .automatic
 
     func scan() -> AsyncStream<ScanEvent> {
         let path = rootPath
         let limit = max(1, maximumConcurrentDirectories)
+        let mode = enumerationMode
         return AsyncStream(bufferingPolicy: .bufferingNewest(16)) { continuation in
             let task = Task.detached(priority: .utility) {
-                await performScan(rootPath: path, limit: limit, continuation: continuation)
+                await performScan(rootPath: path, limit: limit, mode: mode, continuation: continuation)
             }
             continuation.onTermination = { @Sendable _ in task.cancel() }
         }
@@ -92,6 +94,7 @@ private struct DirectoryResult: Sendable {
 private func performScan(
     rootPath: String,
     limit: Int,
+    mode: DirectoryEnumerationMode,
     continuation: AsyncStream<ScanEvent>.Continuation
 ) async {
     defer { continuation.finish() }
@@ -121,7 +124,7 @@ private func performScan(
                 try Task.checkCancellation()
                 while active < limit, let job = pending.popLast() {
                     group.addTask {
-                        try scanDirectory(job, state: state, continuation: continuation)
+                        try scanDirectory(job, mode: mode, state: state, continuation: continuation)
                     }
                     active += 1
                 }
@@ -151,6 +154,7 @@ private func performScan(
 
 private func scanDirectory(
     _ job: DirectoryJob,
+    mode: DirectoryEnumerationMode,
     state: ScanState,
     continuation: AsyncStream<ScanEvent>.Continuation
 ) throws -> DirectoryResult {
@@ -171,17 +175,54 @@ private func scanDirectory(
             result.issue = directoryError(errno)
             return result
         }
+        defer { close(fd) }
         var currentStat = Darwin.stat()
         guard fstat(fd, &currentStat) == 0,
               currentStat.st_dev == state.rootDevice,
               UInt64(currentStat.st_ino) == job.node.id else {
-            close(fd)
             result.issue = "Folder changed during the scan; rescan to measure its contents."
             return result
         }
-        guard let dir = fdopendir(fd) else {
+
+        func append(name: String, metadata: Darwin.stat) {
+            guard metadata.st_dev == state.rootDevice else { return }
+            let type = metadata.st_mode & S_IFMT
+            guard type == S_IFDIR || type == S_IFREG, state.record(metadata) else { return }
+            let child = FileNode(name: name, metadata: metadata)
+            result.children.append(child)
+            if child.isDirectory {
+                let childPath = job.path == "/" ? "/" + name : job.path + "/" + name
+                result.subdirectories.append(DirectoryJob(path: childPath, node: child))
+            }
+        }
+
+        if mode == .automatic {
+            var reader = BulkDirectoryReader()
+            bulk: while true {
+                try Task.checkCancellation()
+                switch try reader.next(fd: fd) {
+                case .entries(let entries, let unavailable):
+                    result.unavailableEntries += unavailable
+                    for entry in entries { append(name: entry.name, metadata: entry.metadata) }
+                    if let progress = state.progress(path: job.path) { continuation.yield(progress) }
+                case .end: return result
+                case .failure(let code):
+                    result.issue = directoryError(code)
+                    return result
+                case .unsupported: break bulk
+                }
+            }
+        }
+        // Never mix getattrlistbulk and readdir on one open file description.
+        // A fresh descriptor also lets unsupported filesystems use POSIX safely.
+        let enumerationFD = openat(fd, ".", O_RDONLY | O_DIRECTORY | O_CLOEXEC)
+        guard enumerationFD >= 0 else {
+            result.issue = directoryError(errno)
+            return result
+        }
+        guard let dir = fdopendir(enumerationFD) else {
             let error = errno
-            close(fd)
+            close(enumerationFD)
             result.issue = directoryError(error)
             return result
         }
@@ -215,20 +256,10 @@ private func scanDirectory(
                 result.unavailableEntries += 1
                 continue
             }
-            guard metadata.st_dev == state.rootDevice else { continue }
-            let mode = metadata.st_mode & S_IFMT
-            guard mode == S_IFDIR || mode == S_IFREG else { continue }
-            guard state.record(metadata) else { continue }
-
             let name = withUnsafeBytes(of: &nameBytes) { bytes in
                 String(cString: bytes.baseAddress!.assumingMemoryBound(to: CChar.self))
             }
-            let child = FileNode(name: name, metadata: metadata)
-            result.children.append(child)
-            if child.isDirectory {
-                let childPath = job.path == "/" ? "/" + name : job.path + "/" + name
-                result.subdirectories.append(DirectoryJob(path: childPath, node: child))
-            }
+            append(name: name, metadata: metadata)
         }
         return result
     }
